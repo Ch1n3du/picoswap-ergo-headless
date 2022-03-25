@@ -194,14 +194,13 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    // @notice Gets the swap requirements of box and fetches an ErgsBox matching said requirements.
-    pub fn match_swap_box(
-        swap_box: SwapBox,
-        explorer_endpoint: String
-    ) -> ErgsBox {
-        let order_owner = parsing::constant_to_base_58_str(swap_box.registers()[0].clone());
-        let order_token_id = parsing::constant_to_base_16_str(swap_box.registers()[1].clone());
-        let order_amount = parsing::constant_to_u64(swap_box.registers()[2].clone());
+    // @notice Returns a BoxSpec for a box that can fufill the given SwapBox
+    pub fn get_match_swap_box(
+        swap_box: SwapBox
+    ) -> BoxSpec {
+        let order_owner = parsing::deserialize_constant_to_base_58_str(swap_box.registers()[0].clone());
+        let order_token_id = parsing::deserialize_constant_to_base_16_str(swap_box.registers()[1].clone());
+        let order_amount = parsing::deserialize_constant_to_u64(swap_box.registers()[2].clone());
 
         let reward_token_id = swap_box.tokens()[0]
             .clone()
@@ -210,17 +209,18 @@ impl SwapProtocol {
             .clone()
             .amount;
 
-        let swap_match_spec = ErgsBox::box_spec()
-            .modified_address(Some(SwapBox::CONTRACT_ADDRESS.to_string()))
-            .modified_tokens(vec![
-                Some(TokenSpec::new(order_amount..u64::MAX, order_token_id)),
-            ])
-            .modified_registers(vec![
+        // Swap Box Match Spec
+        BoxSpec::new(
+            Some(SwapBox::CONTRACT_ADDRESS.to_string()), 
+            None, 
+            vec![
                 RegisterSpec::new(Some(SType::SColl(Box::new(SType::SByte))), None),
                 RegisterSpec::new(Some(SType::SColl(Box::new(SType::SByte))), None),
                 RegisterSpec::new(Some(SType::SLong), None),
-            ]);
-
-        todo!()
+            ], 
+            vec![
+                Some(TokenSpec::new(order_amount..u64::MAX, order_token_id))
+            ]
+        )
     }
 }
