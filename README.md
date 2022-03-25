@@ -1,4 +1,2 @@
-# picoswap-ergo-headless [WIP]
-Headless Dapp to for PicoSwap
-
-
+# picoswap-ergo-headless ✨
+Headless Dapp to for PicoSwap.
