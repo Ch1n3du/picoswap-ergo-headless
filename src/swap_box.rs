@@ -11,6 +11,9 @@ SWAPBOX ERGOSCRIPT
     * @param orderOwner Address to which is in control of the swap box (Base58 encoded string).
     * @param orderTokenId TokenId for token to be payed to orderOwner(Base16 encoded string).
     * @param orderAmount Amount of orderTokenId to be payed to orderOwner (Long).
+
+    * @var defined Checks to make sure necessary data is in registers
+    * @var correctPayout Function to evaluate if Output satisfies swap condition
     {
         val defined = {
 	        SELF.R4[SigmaProp].isDefined && 
@@ -22,7 +25,7 @@ SWAPBOX ERGOSCRIPT
         val orderTokenId = SELF.R5[Coll[Byte]].get
         val ordeerAmount = SELF.R6[Long].get
 
-        \// Checks to  see that an output box satisfies swap conditions
+        /// Checks to  see that an output box satisfies swap conditions
         def correctPayout = {(outBox: Box) => 
             outBox.tokens(0)._1 == orderToken._1 &&
             outBox.tokens(0)._2 == orderToken._2 &&
@@ -76,7 +79,7 @@ pub struct SwapProtocol {}
 impl SwapProtocol {
     
 
-    // @notice Action to create SwapBox instance.
+    /// @notice Action to create SwapBox instance.
     pub fn action_create_swap_box(
         _order_owner: String,
         _order_token_id: String,
@@ -116,7 +119,7 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    // @notice Action to reclaim SwapBox instance by orderOwner :(
+    /// @notice Action to reclaim SwapBox instance by orderOwner :(
     pub fn action_reclaim_swap(
         order_owner: String,
         swap_box_to_reclaim: SwapBox,
@@ -149,8 +152,8 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    // @notice Takes two boxes that can fufill each other and execute swap :) 
-    // @param executor_address Address to collect fees and change
+    /// @notice Takes two boxes that can fufill each other and execute swap :) 
+    /// @param executor_address Address to collect fees and change
     pub fn action_execute_swap(
         swap_box: SwapBox,
         swap_owner_address: String,
@@ -194,7 +197,7 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    // @notice Returns a BoxSpec for a box that can fufill the given SwapBox
+    /// @notice Returns a BoxSpec for a box that can fufill the given SwapBox
     pub fn get_match_swap_box(
         swap_box: SwapBox
     ) -> BoxSpec {
