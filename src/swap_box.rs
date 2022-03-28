@@ -1,6 +1,10 @@
 use ergo_headless_dapp_framework::*;
+use ergo_headless_dapp_framework::Constant;
 use crate::parsing;
 pub use ergo_lib::*;
+// use ergotree_ir::mir::constant;
+use ergotree_ir::mir::constant::Literal;
+use std::convert::TryInto;
 
 /*
 ======================================================================
@@ -39,6 +43,7 @@ SWAPBOX ERGOSCRIPT
 ======================================================================
 */
 
+/// BoxSpec for SwapBox
 #[derive(Debug, Clone, WrapBox, SpecBox)]
 pub struct SwapBox {
     ergo_box: ErgoBox,
@@ -79,7 +84,7 @@ pub struct SwapProtocol {}
 impl SwapProtocol {
     
 
-    /// @notice Action to create SwapBox instance.
+    /// Action to create SwapBox instance.
     pub fn action_create_swap_box(
         _order_owner: String,
         _order_token_id: String,
@@ -119,7 +124,7 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    /// @notice Action to reclaim SwapBox instance by orderOwner :(
+    /// Action to reclaim SwapBox instance by orderOwner :(
     pub fn action_reclaim_swap(
         order_owner: String,
         swap_box_to_reclaim: SwapBox,
@@ -152,8 +157,8 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    /// @notice Takes two boxes that can fufill each other and execute swap :) 
-    /// @param executor_address Address to collect fees and change
+    /// Takes two boxes that can fufill each other and execute swap :) 
+    // @param executor_address Address to collect fees and change
     pub fn action_execute_swap(
         swap_box: SwapBox,
         swap_owner_address: String,
@@ -197,33 +202,36 @@ impl SwapProtocol {
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
-    /// @notice Returns a BoxSpec for a box that can fufill the given SwapBox
+    /// Returns a BoxSpec for a box that can fufill the given SwapBox
     pub fn get_match_swap_box(
-        swap_box: SwapBox
-    ) -> BoxSpec {
-        let order_owner = parsing::deserialize_constant_to_base_58_str(swap_box.registers()[0].clone());
-        let order_token_id = parsing::deserialize_constant_to_base_16_str(swap_box.registers()[1].clone());
-        let order_amount = parsing::deserialize_constant_to_u64(swap_box.registers()[2].clone());
+        swap_box: SwapBox,
+        order_token_id: &str,
+        order_amount: u64,
+    ) -> Option<BoxSpec> {
 
-        let reward_token_id = swap_box.tokens()[0]
-            .clone()
-            .token_id;
-        let reward_token_amount = swap_box.tokens()[0]
-            .clone()
-            .amount;
+        // TODO: Deserialise order_token_id from SELF.R5[Coll[Byte]] into a &str
+        // let order_token_id = swap_box.registers()[1].clone();
+        // TODO: Deserialise order_amount from SELF.R6[Long] into a u64
+        // let order_amount = todo!();
+
+        let reward_token_id: Vec<u8> = swap_box.tokens()[0]
+            .token_id
+            .as_ref()
+            .try_into()
+            .unwrap();
 
         // Swap Box Match Spec
-        BoxSpec::new(
+        Some(BoxSpec::new(
             Some(SwapBox::CONTRACT_ADDRESS.to_string()), 
             None, 
             vec![
                 RegisterSpec::new(Some(SType::SColl(Box::new(SType::SByte))), None),
-                RegisterSpec::new(Some(SType::SColl(Box::new(SType::SByte))), None),
+                RegisterSpec::new(Some(SType::SColl(Box::new(SType::SByte))), Some(Constant::from(reward_token_id))),
                 RegisterSpec::new(Some(SType::SLong), None),
             ], 
             vec![
                 Some(TokenSpec::new(order_amount..u64::MAX, order_token_id))
             ]
-        )
+        ))
     }
 }
