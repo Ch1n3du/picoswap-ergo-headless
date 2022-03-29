@@ -1,9 +1,8 @@
 use ergo_headless_dapp_framework::*;
-use ergo_headless_dapp_framework::Constant;
+use ergo_headless_dapp_framework::encoding;
 use crate::parsing;
 pub use ergo_lib::*;
-// use ergotree_ir::mir::constant;
-use ergotree_ir::mir::constant::Literal;
+use ergotree_ir::mir::constant::TryExtractFrom;
 use std::convert::TryInto;
 
 /*
@@ -203,16 +202,14 @@ impl SwapProtocol {
     }
 
     /// Returns a BoxSpec for a box that can fufill the given SwapBox
-    pub fn get_match_swap_box(
+    pub fn get_swap_box_match(
         swap_box: SwapBox,
-        order_token_id: &str,
-        order_amount: u64,
     ) -> Option<BoxSpec> {
 
         // TODO: Deserialise order_token_id from SELF.R5[Coll[Byte]] into a &str
-        // let order_token_id = swap_box.registers()[1].clone();
-        // TODO: Deserialise order_amount from SELF.R6[Long] into a u64
-        // let order_amount = todo!();
+        let order_token_id = 
+            encoding::unwrap_string(&swap_box.registers()[1]).unwrap();
+        let order_amount = encoding::unwrap_long(&swap_box.registers()[2]).unwrap() as u64;
 
         let reward_token_id: Vec<u8> = swap_box.tokens()[0]
             .token_id
@@ -230,8 +227,9 @@ impl SwapProtocol {
                 RegisterSpec::new(Some(SType::SLong), None),
             ], 
             vec![
-                Some(TokenSpec::new(order_amount..u64::MAX, order_token_id))
+                Some(TokenSpec::new(order_amount..u64::MAX, &order_token_id))
             ]
         ))
     }
+
 }
