@@ -1,9 +1,4 @@
-use ergo_headless_dapp_framework::*;
-use ergo_headless_dapp_framework::encoding;
-use crate::parsing;
-pub use ergo_lib::*;
-use ergotree_ir::mir::constant::TryExtractFrom;
-use std::convert::TryInto;
+use ergo_headless_dapp_framework::{*, encoding};
 
 /*
 ======================================================================
@@ -11,24 +6,23 @@ SWAPBOX ERGOSCRIPT
 ======================================================================
     * @notice This box holds a token to be swapped for an arbitrary token that isn't Erg or can be refunded
     *         to orderOwner.
-    * @param orderOwner Address to which is in control of the swap box (Base58 encoded string).
-    * @param orderTokenId TokenId for token to be payed to orderOwner(Base16 encoded string).
-    * @param orderAmount Amount of orderTokenId to be payed to orderOwner (Long).
+    * @param orderOwner Address which owns the SwapBox order {Base58 String}.
+    * @param orderTokenId TokenId for token to be payed to orderOwner{Base16 String}.
+    * @param orderAmount Amount of orderTokenId to be payed to orderOwner {Long}.
 
-    * @var defined Checks to make sure necessary data is in registers
-    * @var correctPayout Function to evaluate if Output satisfies swap condition
     {
+       \// Checks to make sure necessary data is in registers
         val defined = {
-	        SELF.R4[SigmaProp].isDefined && 
+	        SELF.R4[Coll[Byte]].isDefined          && 
 	        SELF.R5[(Coll[Byte], Long)].isDefined &&
             SELF.R6[Long].isDefined
         }
 
-        val orderOwner = SELF.R4[SigmaProp].get
+        val orderOwner = SELF.R4[Coll[Byte]].get
         val orderTokenId = SELF.R5[Coll[Byte]].get
         val ordeerAmount = SELF.R6[Long].get
 
-        /// Checks to  see that an output box satisfies swap conditions
+        \// Checks to  see that an output box satisfies swap conditions
         def correctPayout = {(outBox: Box) => 
             outBox.tokens(0)._1 == orderToken._1 &&
             outBox.tokens(0)._2 == orderToken._2 &&
@@ -100,20 +94,26 @@ impl SwapProtocol {
         let swap_reward = ergs_box_for_swap.tokens()[0].clone();
         let value_after_fees = ergs_box_for_swap.nano_ergs() - transaction_fee;
 
-        let order_owner = parsing::string_to_constant(_order_owner);
-        let order_token_id = parsing::string_to_constant(_order_token_id);
+        let order_owner = encoding::serialize_string(&_order_owner);
+        let order_token_id = encoding::serialize_string(&_order_token_id);
         let order_amount = Constant::from(_order_amount as i64);
 
         let swap_box_candidate = create_candidate(
             value_after_fees, 
             &SwapBox::CONTRACT_ADDRESS.to_string(), 
-            &vec![swap_reward], 
-            &vec![order_owner, order_token_id, order_amount], 
+            &ergs_box_for_swap.tokens(),
+            &vec![
+                order_owner,
+                order_token_id,
+                order_amount
+            ],
             current_height
         ).unwrap();
 
-        let transaction_fee_candidate =
-           TxFeeBox::output_candidate(transaction_fee, current_height).unwrap();
+        let transaction_fee_candidate = TxFeeBox::output_candidate(
+            transaction_fee, 
+            current_height
+        ).unwrap();
 
         let output_candidates = vec![
             swap_box_candidate,
@@ -130,23 +130,25 @@ impl SwapProtocol {
         current_height: u64,
         transaction_fee: u64,
     ) -> UnsignedTransaction {
+
         let tx_inputs = vec![
             swap_box_to_reclaim.as_unsigned_input(),
         ].try_into().unwrap();
 
         let refund_value_after_fees = swap_box_to_reclaim.nano_ergs() - transaction_fee;
-        let swap_token = swap_box_to_reclaim.tokens()[0].clone();
 
         let refund_candidate = create_candidate(
             refund_value_after_fees, 
             &order_owner, 
-            &vec![swap_token], 
+            &swap_box_to_reclaim.tokens(),
             &vec![], 
             current_height
         ).unwrap();
 
-        let transaction_fee_candidate = 
-            TxFeeBox::output_candidate(transaction_fee, current_height).unwrap();
+        let transaction_fee_candidate = TxFeeBox::output_candidate(
+            transaction_fee, 
+            current_height
+        ).unwrap();
 
         let output_candidates = vec![
             refund_candidate,
@@ -157,26 +159,42 @@ impl SwapProtocol {
     }
 
     /// Takes two boxes that can fufill each other and execute swap :) 
-    // @param executor_address Address to collect fees and change
+    /*
+    * @param swap_box SwapBox to be fufilled.
+    * @param ergs_box_to_fufill ErgsBox to be used in tx to fufill swap_box order.
+    * @param fufiller_address Address to be payed reward from swap_box order.
+    */
     pub fn action_execute_swap(
-        swap_box: SwapBox,
-        swap_owner_address: String,
-        ergs_box_to_fufill: ErgsBox,
-        fufiller_address: String,
+        swap_box_1: SwapBox,
+        swap_box_2: SwapBox,
         current_height: u64,
         transaction_fee: u64,
     ) -> UnsignedTransaction {
+
         let tx_inputs = vec![
-            swap_box.as_unsigned_input(),
-            ergs_box_to_fufill.as_unsigned_input(),
+            swap_box_1.as_unsigned_input(),
+            swap_box_2.as_unsigned_input(),
         ].try_into().unwrap();
 
-        let value_after_fee = swap_box.nano_ergs() - transaction_fee;
-        let swap_fufilling_candidate = create_candidate(
-            value_after_fee, 
-            &swap_owner_address, 
-            &vec![ergs_box_to_fufill.tokens()[0].clone()], 
-            &vec![], 
+        let swap_box_1_owner_address = encoding::unwrap_string(&swap_box_1.registers()[0]).unwrap();
+        let swap_box_1_value_after_fees: NanoErg = swap_box_1.nano_ergs() - (transaction_fee / 2);
+
+        let swap_box_2_owner_address = encoding::unwrap_string(&swap_box_2.registers()[0]).unwrap();
+        let swap_box_2_value_after_fees: NanoErg = swap_box_2.nano_ergs() - (transaction_fee / 2);
+
+        let swap_box_1_fufilling_candidate = create_candidate(
+            swap_box_1_value_after_fees, 
+            &swap_box_1_owner_address, 
+            &swap_box_2.tokens(), 
+            &vec![encoding::serialize_string(&swap_box_1_owner_address)], 
+            current_height
+        ).unwrap();
+
+        let swap_box_2_fufilling_candidate = create_candidate(
+            swap_box_2_value_after_fees, 
+            &swap_box_2_owner_address, 
+            &swap_box_1.tokens(), 
+            &vec![encoding::serialize_string(&swap_box_2_owner_address)], 
             current_height
         ).unwrap();
         
@@ -185,26 +203,20 @@ impl SwapProtocol {
             current_height
         ).unwrap();
 
-        let reward_candidate = ChangeBox::output_candidate(
-            &vec![swap_box.tokens()[0].clone()], 
-           ergs_box_to_fufill.nano_ergs(), 
-            &fufiller_address,
-            current_height
-        ).unwrap();
 
         let output_candidates = vec![
-            tx_fee_candidate,
-            swap_fufilling_candidate,
-            reward_candidate,
+            swap_box_1_fufilling_candidate,
+            swap_box_2_fufilling_candidate,
+            tx_fee_candidate
         ].try_into().unwrap();
 
         UnsignedTransaction::new(tx_inputs, None, output_candidates).unwrap()
     }
 
     /// Returns a BoxSpec for a box that can fufill the given SwapBox
-    pub fn get_swap_box_match(
+    pub fn get_swap_box_match_spec(
         swap_box: SwapBox,
-    ) -> Option<BoxSpec> {
+    ) -> BoxSpec {
 
         // TODO: Deserialise order_token_id from SELF.R5[Coll[Byte]] into a &str
         let order_token_id = 
@@ -218,7 +230,7 @@ impl SwapProtocol {
             .unwrap();
 
         // Swap Box Match Spec
-        Some(BoxSpec::new(
+        BoxSpec::new(
             Some(SwapBox::CONTRACT_ADDRESS.to_string()), 
             None, 
             vec![
@@ -229,7 +241,7 @@ impl SwapProtocol {
             vec![
                 Some(TokenSpec::new(order_amount..u64::MAX, &order_token_id))
             ]
-        ))
+        )
     }
 
 }
